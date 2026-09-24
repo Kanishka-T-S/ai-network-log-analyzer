@@ -1,0 +1,17 @@
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.git
+.gitignore
+.pytest_cache
+.coverage
+htmlcov
+.vscode
+.idea
+*.log
+scratch/
+instance/logs.db
+instance/uploads/*

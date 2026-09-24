@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Network Log Analyzer{% endblock %}
+{% block content %}
+<h3 class="mb-4">Dashboard</h3>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card card-stat p-3">
+      <div class="stat-value">{{ stats.total_logs }}</div>
+      <div class="stat-label">Total Logs</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card card-stat p-3">
+      <div class="stat-value text-success">{{ stats.normal_logs }}</div>
+      <div class="stat-label">Normal Logs</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card card-stat p-3">
+      <div class="stat-value text-danger">{{ stats.suspicious_logs }}</div>
+      <div class="stat-label">Suspicious Logs</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card card-stat p-3">
+      <div class="stat-value text-warning">{{ stats.critical_incidents }}</div>
+      <div class="stat-label">Critical Incidents</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card card-stat p-3">
+      <div class="stat-value" style="font-size:1.3rem;">{{ stats.most_active_ip }}</div>
+      <div class="stat-label">Most Active IP</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-4 col-lg-2">
+    <div class="card card-stat p-3">
+      <div class="stat-value" style="font-size:1.3rem;">{{ stats.most_used_protocol }}</div>
+      <div class="stat-label">Most Used Protocol</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card chart-card p-3">
+      <h6>Logs Over Time</h6>
+      <canvas id="chartTimeline" height="90"></canvas>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card chart-card p-3">
+      <h6>Protocol Distribution</h6>
+      <canvas id="chartProtocol" height="90"></canvas>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card chart-card p-3">
+      <h6>Attack Types</h6>
+      <canvas id="chartAttackTypes" height="120"></canvas>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card chart-card p-3">
+      <h6>Severity Distribution</h6>
+      <canvas id="chartSeverity" height="120"></canvas>
+    </div>
+  </div>
+  <div class="col-lg-12">
+    <div class="card chart-card p-3">
+      <h6>Top Attacking IPs</h6>
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Source IP</th><th>Suspicious Events</th></tr></thead>
+        <tbody>
+        {% for ip in stats.top_attacking_ips %}
+          <tr><td>{{ ip.source_ip }}</td><td>{{ ip.c }}</td></tr>
+        {% else %}
+          <tr><td colspan="2" class="text-muted">No suspicious activity detected yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+  const timelineData = {{ stats.logs_over_time | tojson }};
+  const attackTypeData = {{ stats.attack_types | tojson }};
+  const protocolData = {{ stats.protocol_distribution | tojson }};
+  const severityData = {{ stats.severity_distribution | tojson }};
+
+  initTimelineChart('chartTimeline', timelineData);
+  initAttackTypesChart('chartAttackTypes', attackTypeData);
+  initProtocolChart('chartProtocol', protocolData);
+  initSeverityChart('chartSeverity', severityData);
+</script>
+{% endblock %}

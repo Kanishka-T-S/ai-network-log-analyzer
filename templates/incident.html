@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Incident Details — Network Log Analyzer{% endblock %}
+{% block content %}
+<h3 class="mb-4">Incident Details — Log #{{ log['id'] }}</h3>
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card p-4">
+      <table class="table table-borderless mb-0">
+        <tr><th style="width:180px;">Time</th><td>{{ log['timestamp'] }}</td></tr>
+        <tr><th>Source IP</th><td>{{ log['source_ip'] }}</td></tr>
+        <tr><th>Destination IP</th><td>{{ log['destination_ip'] }}</td></tr>
+        <tr><th>Protocol</th><td>{{ log['protocol'] }}</td></tr>
+        <tr><th>Event Type</th><td>{{ log['event_type'] }}</td></tr>
+        <tr><th>Severity</th><td>{{ log['severity'] }}</td></tr>
+        <tr><th>Status</th>
+          <td>
+            {% if log['status'] == 'Suspicious' %}
+              <span class="badge badge-suspicious">Suspicious</span>
+            {% elif log['status'] == 'Normal' %}
+              <span class="badge badge-normal">Normal</span>
+            {% else %}
+              <span class="badge bg-secondary">Not analyzed</span>
+            {% endif %}
+          </td>
+        </tr>
+        <tr><th>Anomaly Score</th><td>{{ "%.3f"|format(log['anomaly_score']) if log['anomaly_score'] is not none else '—' }}</td></tr>
+        <tr><th>Risk Score</th>
+          <td>
+            {% set risk = log['risk_score'] or 0 %}
+            <div class="d-flex align-items-center gap-2">
+              <div class="risk-bar-bg" style="max-width:200px;">
+                <div class="risk-bar-fill" style="width: {{ risk }}%;"></div>
+              </div>
+              <span>{{ risk }}/100</span>
+            </div>
+          </td>
+        </tr>
+        <tr><th>Threat Type</th><td>{{ log['threat_type'] or '—' }}</td></tr>
+        <tr><th>Description</th><td>{{ log['description'] or 'No additional description.' }}</td></tr>
+        <tr><th>Raw Log</th><td><code class="small">{{ log['raw_log'] }}</code></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card p-4">
+      <h5>Suggested Response Actions</h5>
+      <ul class="list-group list-group-flush mt-2">
+        {% for action in actions %}
+          <li class="list-group-item">✅ {{ action }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</div>
+
+<a href="{{ url_for('view_logs') }}" class="btn btn-link mt-3">&larr; Back to Log Viewer</a>
+{% endblock %}
