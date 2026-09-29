@@ -1,59 +1,92 @@
 import time
 import pandas as pd
+import pytest
 
 from utils import db
 from utils.detector import preprocess, predict_anomalies
 from utils.agents.orchestrator import security_orchestrator
-from utils.detector import compute_risk_score
 
 
-print("=== DETECTION SPEED TEST ===")
+def test_detection_speed():
 
-# 1. Fetch
-start = time.time()
+    print("\n=== DETECTION SPEED TEST ===")
 
-rows = db.fetch_unanalyzed_logs()
+    # ---------------------------------------------------------
+    # 1. Fetch unanalyzed logs
+    # ---------------------------------------------------------
+    start = time.time()
 
-print(f"Rows fetched: {len(rows)}")
-print(f"Fetch time: {time.time() - start:.2f} seconds")
+    rows = db.fetch_unanalyzed_logs()
 
+    fetch_time = time.time() - start
 
-# 2. DataFrame + preprocessing
-start = time.time()
+    print(f"Rows fetched: {len(rows)}")
+    print(f"Fetch time: {fetch_time:.2f} seconds")
 
-df = pd.DataFrame([dict(r) for r in rows])
-df, features = preprocess(df)
+    # No logs available → skip benchmark
+    if not rows:
+        pytest.skip("No unanalyzed logs available for detection speed test")
 
-print(f"Feature shape: {features.shape}")
-print(f"Preprocessing time: {time.time() - start:.2f} seconds")
+    # ---------------------------------------------------------
+    # 2. DataFrame + preprocessing
+    # ---------------------------------------------------------
+    start = time.time()
 
+    df = pd.DataFrame([dict(r) for r in rows])
+    df, features = preprocess(df)
 
-# 3. Model prediction
-start = time.time()
+    preprocessing_time = time.time() - start
 
-preds, scores = predict_anomalies(features)
+    print(f"Feature shape: {features.shape}")
+    print(f"Preprocessing time: {preprocessing_time:.2f} seconds")
 
-print(f"Prediction time: {time.time() - start:.2f} seconds")
+    # Safety check
+    assert len(features) > 0, "Preprocessing produced zero feature rows"
 
+    # ---------------------------------------------------------
+    # 3. Model prediction
+    # ---------------------------------------------------------
+    start = time.time()
 
-# 4. Agent analysis
-start = time.time()
+    preds, scores = predict_anomalies(features)
 
-suspicious = 0
+    prediction_time = time.time() - start
 
-for _, row in df.iterrows():
+    print(f"Prediction time: {prediction_time:.2f} seconds")
 
-    analysis = security_orchestrator.analyze_log(
-        row=row.to_dict(),
-        anomaly_prediction=preds[_],
-        anomaly_score=scores[_]
-    )
+    # Verify prediction output
+    assert len(preds) == len(features)
+    assert len(scores) == len(features)
 
-    if analysis["status"] == "Suspicious":
-        suspicious += 1
+    # ---------------------------------------------------------
+    # 4. Agent analysis
+    # ---------------------------------------------------------
+    start = time.time()
 
-print(f"Agent analysis time: {time.time() - start:.2f} seconds")
-print(f"Suspicious: {suspicious}")
+    suspicious = 0
 
+    for index, (_, row) in enumerate(df.iterrows()):
 
-print("=== TEST COMPLETE ===")
+        analysis = security_orchestrator.analyze_log(
+            row=row.to_dict(),
+            anomaly_prediction=preds[index],
+            anomaly_score=scores[index]
+        )
+
+        assert "status" in analysis
+
+        if analysis["status"] == "Suspicious":
+            suspicious += 1
+
+    agent_time = time.time() - start
+
+    print(f"Agent analysis time: {agent_time:.2f} seconds")
+    print(f"Suspicious: {suspicious}")
+
+    print("=== TEST COMPLETE ===")
+
+    # Basic performance assertions
+    assert fetch_time >= 0
+    assert preprocessing_time >= 0
+    assert prediction_time >= 0
+    assert agent_time >= 0

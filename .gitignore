@@ -27,3 +27,6 @@ data/
 .idea/
 
 .DS_Store
+# Local backup and Docker image archive
+model/train_unsw_model_backup.py
+*.tar

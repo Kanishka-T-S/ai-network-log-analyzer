@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: network-log-analyzer
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: network-log-analyzer
+  template:
+    metadata:
+      labels:
+        app: network-log-analyzer
+    spec:
+      containers:
+        - name: network-log-analyzer
+          image: network-log-analyzer:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 5000
+            initialDelaySeconds: 30
+            periodSeconds: 20

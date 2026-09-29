@@ -1,3 +1,120 @@
+def _get_row_value(row, field_names):
+    if row is None:
+        return None
+    if hasattr(row, "to_dict"):
+        d = row.to_dict()
+    elif isinstance(row, dict):
+        d = row
+    elif hasattr(row, "items"):
+        d = dict(row.items())
+    else:
+        try:
+            d = dict(row)
+        except Exception:
+            return None
+
+    norm_map = {}
+    for k, v in d.items():
+        norm_k = str(k).strip().lower().replace(" ", "_")
+        norm_map[norm_k] = v
+
+    for field in field_names:
+        norm_field = field.lower().strip().replace(" ", "_")
+        if norm_field in norm_map:
+            val = norm_map[norm_field]
+            if val is not None:
+                try:
+                    import pandas as pd
+                    if pd.isna(val):
+                        continue
+                except Exception:
+                    pass
+                s_val = str(val).strip()
+                if s_val != "" and s_val.lower() not in {"nan", "none", "null", "n/a", "-", "undefined"}:
+                    return s_val
+    return None
+
+
+def get_dataset_threat(row):
+    """
+    Safely inspect dataset attack fields (attack_cat, attack_category, attack_type, threat_type, event_type)
+    case-insensitively and normalize into the project's threat names or preserve readable attack categories.
+    """
+    is_explicit_field = True
+    raw_val = _get_row_value(row, ["attack_cat", "attack_category", "attack_type", "threat_type"])
+
+    if raw_val is None:
+        is_explicit_field = False
+        raw_val = _get_row_value(row, ["event_type"])
+
+    if raw_val is None:
+        return None
+
+    s = raw_val.strip().lower()
+
+    # Generic event types / placeholders to ignore when from event_type or generic dataset column
+    if s in {"connection", "file transfer", "dns query", "network traffic", "http request", "general", "log", "event", "login failure"}:
+        if not is_explicit_field:
+            return None
+
+    # Explicit normal traffic handling
+    if s in {"normal", "normal activity", "benign", "normal traffic", "clean"}:
+        return "Normal Activity"
+
+    # 1. DoS / DDoS
+    if s in {"dos", "ddos", "denial of service", "denial-of-service", "dos/ddos"} or "denial of service" in s:
+        return "DDoS"
+
+    # 2. Brute Force Login
+    if (
+        s in {"brute force", "brute-force", "ssh-bruteforce", "ftp-bruteforce", "bruteforce", "brute force login"}
+        or "brute force" in s
+        or "bruteforce" in s
+    ):
+        return "Brute Force Login"
+
+    # 3. Port Scan
+    if s in {"port scan", "portscan", "reconnaissance", "scan", "port-scan"} or "port scan" in s or "portscan" in s:
+        return "Port Scan"
+
+    # 4. Data Exfiltration
+    if s in {"data exfiltration", "exfiltration"} or "exfiltration" in s:
+        return "Data Exfiltration"
+
+    # 5. Malware Communication
+    if (
+        s in {"malware", "c2", "command and control", "command & control", "backdoor", "malware communication"}
+        or "malware" in s
+        or "command and control" in s
+    ):
+        return "Malware Communication"
+
+    # 6. Web Attack
+    if (
+        s in {"web attack", "web attack - brute force", "web attack - xss", "web attack - sql injection"}
+        or "web attack" in s
+    ):
+        return "Web Attack"
+
+    # 7. RDP Attack
+    if s in {"rdp", "rdp attack", "rdp-attack"} or "rdp attack" in s or s == "rdp":
+        return "RDP Attack"
+
+    # 8. FTP Attack
+    if s in {"ftp", "ftp attack", "ftp-attack"} or "ftp attack" in s or s == "ftp":
+        return "FTP Attack"
+
+    # If from event_type and not a recognized attack mapping, return None so rule-based engine can evaluate
+    if not is_explicit_field:
+        return None
+
+    # If the value is a meaningful attack category from an explicit column not in the mapping, preserve as readable category
+    formatted = raw_val.replace("_", " ").replace("-", " ").strip()
+    if formatted.islower() or formatted.isupper():
+        formatted = formatted.title()
+    return formatted
+
+
 def classify_threat(
     row,
     port_scan_ip_counts=None,
@@ -5,12 +122,20 @@ def classify_threat(
     bruteforce_ip_counts=None
 ):
     """
-    Rule-based threat classification for a single suspicious log row.
+    Rule-based and dataset-assisted threat classification for a single log row.
 
-    Optional aggregate dictionaries improve detection when processing
-    a complete batch of network logs.
+    Classification priority:
+    1. Valid explicit dataset attack category (FIRST)
+    2. Rule-based threat detection (SECOND)
+    3. Fallback to 'Unknown Attack' (THIRD)
     """
 
+    # FIRST: Use valid explicit dataset attack category if present
+    dataset_threat = get_dataset_threat(row)
+    if dataset_threat:
+        return dataset_threat
+
+    # SECOND: Rule-based detection
     packets = row.get("packets", 0) or 0
     bytes_sent = row.get("bytes_sent", 0) or 0
     dest_port = row.get("destination_port", 0) or 0
@@ -92,7 +217,7 @@ def classify_threat(
         return "Malware Communication"
 
     # ---------------------------------------------------------
-    # 6. UNKNOWN
+    # 6. UNKNOWN (THIRD)
     # ---------------------------------------------------------
     return "Unknown Attack"
 
@@ -150,6 +275,7 @@ def build_batch_aggregates(df):
         bruteforce_ip_counts
     )
 
+
 def generate_description(threat_type, row):
     templates = {
         "Port Scan": f"Multiple destination ports probed from {row.get('source_ip')} in a short window, "
@@ -162,7 +288,12 @@ def generate_description(threat_type, row):
                                   f"({row.get('destination_port')}), consistent with C2 beaconing.",
         "Data Exfiltration": f"Unusually large outbound transfer ({row.get('bytes_sent')} bytes) from "
                               f"{row.get('source_ip')} to {row.get('destination_ip')}.",
+        "Web Attack": "Network activity identified as a web attack based on the dataset-provided attack category.",
+        "RDP Attack": "Network activity identified as an RDP attack based on the dataset-provided attack category.",
+        "FTP Attack": "Network activity identified as an FTP attack based on the dataset-provided attack category.",
+        "Normal Activity": "Traffic identified as normal or benign activity.",
         "Unknown Attack": f"Flagged as anomalous by the detection model but did not match a known rule "
                            f"pattern. Manual review recommended.",
     }
-    return templates.get(threat_type, "Anomalous activity detected.")
+    return templates.get(threat_type, f"Network activity identified as {threat_type} based on security analysis.")
+

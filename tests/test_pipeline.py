@@ -259,3 +259,37 @@ def test_end_to_end_security_orchestrator():
     assert decision["threat_type"] == "Malware Communication"
     assert decision["severity"] == "High"
     assert "Isolate affected host from the network" in decision["recommended_action"]
+
+
+# ---------------------------------------------------------------------------
+# 10. Explicit Dataset Threat Category Classification Tests
+# ---------------------------------------------------------------------------
+def test_dataset_attack_category_classification():
+    # A. DoS -> DDoS
+    row_dos = {"attack_cat": "DoS", "source_ip": "10.0.0.1", "destination_ip": "10.0.0.2"}
+    assert classify_threat(row_dos) == "DDoS"
+
+    # B. RDP -> RDP Attack
+    row_rdp = {"attack_cat": "RDP", "source_ip": "10.0.0.1", "destination_ip": "10.0.0.2"}
+    assert classify_threat(row_rdp) == "RDP Attack"
+
+    # C. FTP -> FTP Attack
+    row_ftp = {"attack_cat": "FTP", "source_ip": "10.0.0.1", "destination_ip": "10.0.0.2"}
+    assert classify_threat(row_ftp) == "FTP Attack"
+
+    # D. Web Attack -> Web Attack
+    row_web = {"attack_cat": "Web Attack", "source_ip": "10.0.0.1", "destination_ip": "10.0.0.2"}
+    assert classify_threat(row_web) == "Web Attack"
+
+    # E. Normal -> Normal Activity
+    row_norm = {"attack_cat": "Normal", "source_ip": "10.0.0.1", "destination_ip": "10.0.0.2"}
+    assert classify_threat(row_norm) == "Normal Activity"
+
+    # F. No category + packets >= 1000 -> DDoS
+    row_high_pkt = {"packets": 1200, "source_ip": "10.0.0.1", "destination_ip": "10.0.0.2"}
+    assert classify_threat(row_high_pkt) == "DDoS"
+
+    # G. No category + no rule match -> Unknown Attack
+    row_unknown = {"packets": 10, "bytes_sent": 100, "destination_port": 80, "event_type": "Connection"}
+    assert classify_threat(row_unknown) == "Unknown Attack"
+

@@ -93,6 +93,8 @@ UNSW_COLUMNS = [
     "is_sm_ips_ports",
     "label",
     "attack_cat",
+    "attack_category",
+    "attack_type",
 ]
 
 def get_connection():

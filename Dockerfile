@@ -30,4 +30,4 @@ RUN mkdir -p instance/uploads
 EXPOSE 5000
 
 # Start Gunicorn WSGI server binding to 0.0.0.0:5000
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "app:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "1", "app:app"]
