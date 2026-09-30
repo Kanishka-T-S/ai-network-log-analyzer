@@ -30,6 +30,10 @@ jobs:
         run: |
           python -m compileall .
 
+      - name: Create CI test artifacts
+        run: |
+          python .github/ci_setup.py
+
       - name: Run tests
         run: |
           pytest -v
